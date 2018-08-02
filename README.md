@@ -49,3 +49,7 @@ Three files will be created, if non-existant, named nomes.txt - which stores eve
 | `dlib 19.15.0`          |`works!`|
 | `openCV 3.4.2`          ||
 | `Python 3.6.5`          ||
+
+### Next Stuff
+
+[ ] Add possibility to train on new faces from local image set
