@@ -4,11 +4,13 @@ import numpy as np
 import datetime
 import pickle
 from pathlib import Path
+import time
 
 
 START_LOG_STR = str(datetime.datetime.now()) + ' - ' + 'INICIO DO LOG\n'
 LOG_MSG = ''
 DEBUG = False
+BENCH = True
 CONF = 0.4
 
 
@@ -166,7 +168,10 @@ while(True):
         last_status_TF = status_TF.copy()                           # Equivale ao status_TF da ultima iteracao
         range_len_status = range(len(status))                       # Usado em alguns loops, aqui calcula-se uma unica vez para otimizacao
 
+        c = 2                                   # Contador para benchmark
+
         while True:
+            bench = time.time()
             # Grab a single frame of video
             ret, frame = video_capture.read()
 
@@ -181,9 +186,7 @@ while(True):
                 # Find all the faces and face encodings in the current frame of video
                 face_locations = face_recognition.face_locations(rgb_small_frame, number_of_times_to_upsample=2)
                 face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
-
                 face_names = []
-                qtd_d = 0      # Quantidade de desconhecidos no frame
 
                 for face_encoding in face_encodings:
                     # See if the face is a match for the known face(s)
@@ -214,6 +217,7 @@ while(True):
 
                     face_names.append(name)
 
+
             process_this_frame = not process_this_frame
 
             # Display the results
@@ -224,13 +228,34 @@ while(True):
                 bottom *= 4
                 left *= 4
 
-                # Draw a box around the face
-                cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
+                # Draw a box around the face - vermelho em desconhecido e verde em conhecido
+                if name == 'Desconhecido':
+                    cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
+                else:
+                    cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
 
                 # Draw a label with a name below the face
-                cv2.rectangle(frame, (left, bottom - 35), (right, bottom), (0, 0, 255), cv2.FILLED)
+                if name == 'Desconhecido':
+                    cv2.rectangle(frame, (left, bottom - 35), (right, bottom), (0, 0, 255), cv2.FILLED)
+                else:
+                    cv2.rectangle(frame, (left, bottom - 35), (right, bottom), (0, 255, 0), cv2.FILLED)
                 font = cv2.FONT_HERSHEY_DUPLEX
                 cv2.putText(frame, name, (left + 6, bottom - 6), font, 1.0, (255, 255, 255), 1)
+
+            '''
+                Essa parte do codigo eh para o LOG.
+                Como as vezes o reconhecimento falha, para nao ficar entrou/saiou/entrou/saiu... no log,
+                um array status foi criado para dar um amortecimento maior as falhas.
+                Entao, sempre que uma pessoa eh reconhecida, o seu nivel de confianca aumenta e o nivel
+                das outras pessoas diminui (o vetor status contem esse numero).
+                Para cada nome, o vetor status tem um indice correspondente.
+                A cada iteracao, o vetor status_TF analisa o vetor status:
+                    Se o status de um certo indice eh < 40, status_TF[indice] = False
+                    Se o status de um certo indice eh > 60, status_TF[indice] = True
+                    Se 40 < status de um certo indice < 60, status_TF[indice] = igual
+                Analisando o vetor status_TF e o vetor status_TF da ultima iteracao,
+                quando ha diferenca entre os dois, significa que a pessoa saiu/entrou.
+            '''
 
             # Diminui a confianca de todos os nomes em 3 pts
             for i in range_len_status:
@@ -262,9 +287,8 @@ while(True):
                         LOG_MSG = '\n' + str(datetime.datetime.now()) + ' saiu ' + list_set__nomes[i]
                         _log.write(LOG_MSG)
 
-            # Para cada frame, analisa se existe um desconhecido. Se sim, aumenta o contador, se nao zera
-            # Depois salva uma imagem com a hora, caso o contador chegue a 100
-            #index_desconhecido = list_set__nomes.index('Desconhecido')
+            # Para cada frame, analisa se existe um desconhecido. Se sim, aumenta o contador, se nao, zera
+            # Depois salva uma imagem com a hora (em safe/{}.png), caso o contador chegue a 100
 
             if 'Desconhecido' in face_names:
                 contador_desconhecido += 1
@@ -288,6 +312,14 @@ while(True):
             # Hit 'q' on the keyboard to quit!
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
+
+            # Se benchmark estiver ativo (default SIM), printa o FPS na tela. Sempre pula um frame pois o processamento dos frames eh frame sim, frame nao
+            if BENCH:
+                if c == 2:
+                    print('FPS:', 1/(time.time() - bench))
+                    c = 1
+                else:
+                    c += 1
 
         # Release handle to the webcam
         video_capture.release()
@@ -333,7 +365,8 @@ while(True):
         print('2. Set Confianca')
         print('3. Resetar log')
         print('4. Resetar todos os arquivos')
-        print('5. Voltar para menu')
+        print('5. Toggle Benchmark')
+        print('6. Voltar para menu')
 
         escolha_menu2 = int(input('Entre com a opcao: '))
 
@@ -379,6 +412,12 @@ while(True):
 
             print('SUCESSO!')
             input('Aperte ENTER para voltar para o programa...')
+
+        # Ativa ou desativa o benchmark (FPS)
+        elif escolha_menu2 == 5:
+            BENCH = not BENCH
+            print('Modo Benchmark:' , BENCH)
+            input('Pressione ENTER para continuar...')
 
         else:
             print('Voltando para o programa principal...')
